@@ -1,29 +1,30 @@
 <?php
 namespace Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation;
 
-use Database;
+use Doctrine\ORM\Mapping as ORM;
+use Concrete\Core\Support\Facade\DatabaseORM as dbORM;
 
 /**
- * @Entity
- * @Table(name="CommunityStoreProductVariationOptionItems")
+ * @ORM\Entity
+ * @ORM\Table(name="CommunityStoreProductVariationOptionItems")
  */
 class ProductVariationOptionItem
 {
     /**
-     * @Id @Column(type="integer")
-     * @GeneratedValue
+     * @ORM\Id @ORM\Column(type="integer")
+     * @ORM\GeneratedValue
      */
     protected $pvoiID;
 
     /**
-     * @ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation\ProductVariation", inversedBy="options", cascade={"persist"})
-     * @JoinColumn(name="pvID", referencedColumnName="pvID", onDelete="CASCADE")
+     * @ORM\ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation\ProductVariation", inversedBy="options", cascade={"persist"})
+     * @ORM\JoinColumn(name="pvID", referencedColumnName="pvID", onDelete="CASCADE")
      */
     protected $variation;
 
     /**
-     * @ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductOption\ProductOptionItem",cascade={"persist"})
-     * @JoinColumn(name="poiID", referencedColumnName="poiID", onDelete="CASCADE")
+     * @ORM\ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductOption\ProductOptionItem", inversedBy="variationoptionitems")
+     * @ORM\JoinColumn(name="poiID", referencedColumnName="poiID", onDelete="CASCADE")
      */
     protected $option;
 
@@ -42,20 +43,27 @@ class ProductVariationOptionItem
         return $this->variation;
     }
 
-    public function setOption($option)
+    public function setOptionItem($option)
     {
         $this->option = $option;
     }
 
-    public function getOption()
+    public function getOptionItem()
     {
         return $this->option;
     }
 
     public function save()
     {
-        $em = \Database::connection()->getEntityManager();
+        $em = dbORM::entityManager();
         $em->persist($this);
+        $em->flush();
+    }
+
+    public function delete()
+    {
+        $em = dbORM::entityManager();
+        $em->remove($this);
         $em->flush();
     }
 }

@@ -1,45 +1,46 @@
 <?php
+
 namespace Concrete\Package\CommunityStore\Src\CommunityStore\Payment;
 
-use Concrete\Core\Foundation\Object as Object;
-use Database;
-use Core;
-use Package;
-use Controller;
-use View;
+use Doctrine\ORM\Mapping as ORM;
+use Concrete\Core\Support\Facade\DatabaseORM as dbORM;
+use Concrete\Core\Support\Facade\Application;
+use Concrete\Core\Package\Package;
+use Concrete\Core\Controller\Controller;
+use Concrete\Core\View\View;
 
 /**
- * @Entity
- * @Table(name="CommunityStorePaymentMethods")
+ * @ORM\Entity
+ * @ORM\Table(name="CommunityStorePaymentMethods")
  */
 class Method extends Controller
 {
     /**
-     * @Id @Column(type="integer")
-     * @GeneratedValue
+     * @ORM\Id @ORM\Column(type="integer")
+     * @ORM\GeneratedValue
      */
     protected $pmID;
 
-    /** @Column(type="text") */
+    /** @ORM\Column(type="text") */
     protected $pmHandle;
 
-    /** @Column(type="text") */
+    /** @ORM\Column(type="text") */
     protected $pmName;
 
-    /** @Column(type="text", nullable=true) */
+    /** @ORM\Column(type="text", nullable=true) */
     protected $pmDisplayName;
 
-    /** @Column(type="text", nullable=true) */
+    /** @ORM\Column(type="text", nullable=true) */
     protected $pmButtonLabel;
 
-    /** @Column(type="boolean") */
+    /** @ORM\Column(type="boolean") */
     protected $pmEnabled;
 
-    /** @Column(type="integer", nullable=true) */
+    /** @ORM\Column(type="integer", nullable=true) */
     protected $pmSortOrder;
 
     /**
-     * @Column(type="integer")
+     * @ORM\Column(type="integer")
      */
     protected $pkgID;
 
@@ -55,7 +56,8 @@ class Method extends Controller
         return $this->pmHandle;
     }
 
-    public function setHandle($handle) {
+    public function setHandle($handle)
+    {
         $this->pmHandle = $handle;
     }
 
@@ -84,7 +86,8 @@ class Method extends Controller
         return $this->pkgID;
     }
 
-    public function setPackageID($pkgID) {
+    public function setPackageID($pkgID)
+    {
         $this->pkgID = $pkgID;
     }
 
@@ -95,12 +98,12 @@ class Method extends Controller
 
     public function setSortOrder($order)
     {
-        $this->pmSortOrder = $order;
+        $this->pmSortOrder = $order ? $order : 0;
     }
 
     public function getDisplayName()
     {
-        if ($this->pmDisplayName == "") {
+        if ("" == $this->pmDisplayName) {
             return $this->pmName;
         } else {
             return $this->pmDisplayName;
@@ -114,7 +117,7 @@ class Method extends Controller
 
     public function setEnabled($status)
     {
-        $this->pmEnabled = (bool)$status;
+        $this->pmEnabled = (bool) $status;
     }
 
     public function isEnabled()
@@ -124,9 +127,7 @@ class Method extends Controller
 
     public static function getByID($pmID)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
-
+        $em = dbORM::entityManager();
         $method = $em->find(get_class(), $pmID);
 
         if ($method) {
@@ -138,10 +139,8 @@ class Method extends Controller
 
     public static function getByHandle($pmHandle)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
-
-        $method = $em->getRepository(get_class())->findOneBy(array('pmHandle' => $pmHandle));
+        $em = dbORM::entityManager();
+        $method = $em->getRepository(get_class())->findOneBy(['pmHandle' => $pmHandle]);
 
         if ($method) {
             $method->setMethodController();
@@ -162,7 +161,7 @@ class Method extends Controller
 
     protected function setMethodController()
     {
-        $th = Core::make("helper/text");
+        $th = Application::getFacadeApplication()->make("helper/text");
         $namespace = "Concrete\\Package\\" . $th->camelcase(Package::getByID($this->pkgID)->getPackageHandle()) . "\\Src\\CommunityStore\\Payment\\Methods\\" . $th->camelcase($this->pmHandle);
 
         $className = $th->camelcase($this->pmHandle) . "PaymentMethod";
@@ -176,13 +175,13 @@ class Method extends Controller
     }
 
     /*
-     * @param string $pmHandle
-     * @param string $pmName
-     * @pkg Package Object
-     * @param string $pmDisplayName
-     * @param bool $enabled
+     * @ORM\param string $pmHandle
+     * @ORM\param string $pmName
+     * @ORM\pkg Package Object
+     * @ORM\param string $pmDisplayName
+     * @ORM\param bool $enabled
      */
-    public static function add($pmHandle, $pmName, $pkg = null, $pmButtonLabel ='', $enabled = false)
+    public static function add($pmHandle, $pmName, $pkg = null, $pmButtonLabel = '', $enabled = false)
     {
         $pm = self::getByHandle($pmHandle);
         if (!($pm instanceof self)) {
@@ -199,17 +198,16 @@ class Method extends Controller
 
     public static function getMethods($enabled = false)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
-
+        $em = dbORM::entityManager();
         if ($enabled) {
-            $methods = $em->getRepository(get_class())->findBy(array('pmEnabled' => 1), array('pmSortOrder'=>'ASC'));
+            $methods = $em->getRepository(get_class())->findBy(['pmEnabled' => 1], ['pmSortOrder' => 'ASC']);
         } else {
-            $methods = $em->getRepository(get_class())->findBy(array(), array('pmSortOrder'=> 'ASC'));
+            $methods = $em->getRepository(get_class())->findBy([], ['pmSortOrder' => 'ASC']);
         }
-        foreach($methods as $method) {
+        foreach ($methods as $method) {
             $method->setMethodController();
         }
+
         return $methods;
     }
 
@@ -223,7 +221,7 @@ class Method extends Controller
         $class = $this->getMethodController();
         $class->checkoutForm();
         $pkg = Package::getByID($this->pkgID);
-        View::element($this->pmHandle . '/checkout_form', array('vars' => $class->getSets()), $pkg->getPackageHandle());
+        View::element($this->pmHandle . '/checkout_form', ['vars' => $class->getSets()], $pkg->getPackageHandle());
     }
 
     public function renderDashboardForm()
@@ -231,7 +229,7 @@ class Method extends Controller
         $controller = $this->getMethodController();
         $controller->dashboardForm();
         $pkg = Package::getByID($this->pkgID);
-        View::element($this->pmHandle . '/dashboard_form', array('vars' => $controller->getSets()), $pkg->getPackageHandle());
+        View::element($this->pmHandle . '/dashboard_form', ['vars' => $controller->getSets()], $pkg->getPackageHandle());
     }
 
     public function renderRedirectForm()
@@ -239,13 +237,14 @@ class Method extends Controller
         $controller = $this->getMethodController();
         $controller->redirectForm();
         $pkg = Package::getByID($this->pkgID);
-        View::element($this->pmHandle . '/redirect_form', array('vars' => $controller->getSets()), $pkg->getPackageHandle());
+        View::element($this->pmHandle . '/redirect_form', ['vars' => $controller->getSets()], $pkg->getPackageHandle());
     }
 
     public function submitPayment()
     {
-        //load controller    
+        //load controller
         $class = $this->getMethodController();
+
         return $class->submitPayment();
     }
 
@@ -261,7 +260,7 @@ class Method extends Controller
 
     public function save(array $data = [])
     {
-        $em = \Database::connection()->getEntityManager();
+        $em = dbORM::entityManager();
         $em->persist($this);
         $em->flush();
     }
@@ -273,20 +272,39 @@ class Method extends Controller
 
     public function remove()
     {
-        $em = \Database::connection()->getEntityManager();
+        $em = dbORM::entityManager();
         $em->remove($this);
         $em->flush();
     }
 
-    public function isExternal() {
+    public function isExternal()
+    {
         return false;
     }
 
-    // method stub
-    public function redirectForm() {
+    public function markPaid()
+    {
+        return true;
+    }
+
+    public function sendReceipt()
+    {
+        return true;
     }
 
     // method stub
-    public function checkoutForm() {
+    public function redirectForm()
+    {
+    }
+
+    // method stub
+    public function checkoutForm()
+    {
+    }
+
+    // method stub
+    public function getPaymentInstructions()
+    {
+        return '';
     }
 }

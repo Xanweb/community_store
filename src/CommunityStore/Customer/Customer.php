@@ -1,10 +1,10 @@
 <?php
 namespace Concrete\Package\CommunityStore\Src\CommunityStore\Customer;
 
-use Session;
-use User;
-use UserInfo;
-use Concrete\Attribute\Address\Value as AddressAttributeValue;
+use Concrete\Core\Support\Facade\Session;
+use Concrete\Core\User\User;
+use Concrete\Core\User\UserInfoRepository;
+use Concrete\Core\Support\Facade\Application;
 
 class Customer
 {
@@ -12,12 +12,13 @@ class Customer
 
     public function __construct($uID = null)
     {
+        $app = Application::getFacadeApplication();
         $u = new User();
 
-        if ($u->isLoggedIn()) {
-            $this->ui = UserInfo::getByID($u->getUserID());
-        } elseif ($uID) {
-            $this->ui = UserInfo::getByID($uID);
+        if (!is_null($uID)) {
+            $this->ui = $app->make(UserInfoRepository::class)->getByID($uID);
+        } elseif ($u->isLoggedIn()) {
+            $this->ui = $app->make(UserInfoRepository::class)->getByID($u->getUserID());
         } else {
             $this->ui = null;
         }
@@ -37,35 +38,21 @@ class Customer
         }
     }
 
-    public function getAddress($handle) {
-
+    public function getAddress($handle)
+    {
         if ($this->isGuest()) {
-            $addressraw = Session::get('community_' .$handle);
+            $addressraw = Session::get('community_' . $handle);
 
-            if (is_array($addressraw)) {
-                $address = new AddressAttributeValue();
-
-                // use concrete5's built in address class for formatting
-                $address->address1 = $addressraw['address1'];
-                $address->address2 = $addressraw['address2'];
-                $address->city = $addressraw['city'];
-                $address->state_province = $addressraw['state_province'];
-                $address->postal_code = $addressraw['postal_code'];
-                $address->city = $addressraw['city'];
-                $address->country = $addressraw['country'];
-            }
-
-            return $address . '';
+            return self::formatAddress($addressraw);
         } else {
-            return $this->ui->getAttribute($handle);
+            return (string) $this->ui->getAttribute($handle);
         }
-
     }
 
     public function getValue($handle)
     {
         if ($this->isGuest()) {
-            $val = Session::get('community_' .$handle);
+            $val = Session::get('community_' . $handle);
 
             if (is_array($val)) {
                 return (object) $val;
@@ -77,10 +64,30 @@ class Customer
         }
     }
 
+    public function getAddressValue($handle, $valuename)
+    {
+        $att = $this->getValue($handle);
+
+        return $this->returnAttributeValue($att, $valuename);
+    }
+
+    private static function returnAttributeValue($att, $valuename)
+    {
+        $valueCamel = camel_case($valuename);
+
+        if (method_exists($att, 'get' . $valueCamel)) {
+            $functionname = 'get' . $valueCamel;
+
+            return $att->$functionname();
+        } else {
+            return $att->$valuename;
+        }
+    }
+
     public function getValueArray($handle)
     {
         if ($this->isGuest()) {
-            $val = Session::get('community_' .$handle);
+            $val = Session::get('community_' . $handle);
 
             return $val;
         } else {
@@ -124,5 +131,99 @@ class Customer
     public function setLastOrderID($id)
     {
         Session::set('community_lastOrderID', $id);
+    }
+
+    // 5.7 compatibility function
+    public static function formatAddress($address)
+    {
+        $app = Application::getFacadeApplication();
+
+        $ret = '';
+        $address1 = self::returnAttributeValue($address, 'address1');
+        $address2 = self::returnAttributeValue($address, 'address2');
+        $city = self::returnAttributeValue($address, 'city');
+        $state_province = self::returnAttributeValue($address, 'state_province');
+        $postal_code = self::returnAttributeValue($address, 'postal_code');
+        $country = self::returnAttributeValue($address, 'country');
+
+        if ($address1) {
+            $ret .= $address1 . "\n";
+        }
+        if ($address2) {
+            $ret .= $address2 . "\n";
+        }
+        if ($city) {
+            $ret .= $city;
+        }
+        if ($state_province) {
+            $ret .= ", ";
+        }
+        if ($state_province) {
+            $val = $app->make('helper/lists/states_provinces')->getStateProvinceName($state_province, $country);
+            if ('' == $val) {
+                $ret .= $state_province;
+            } else {
+                $ret .= $val;
+            }
+        }
+        if ($postal_code) {
+            $ret .= " " . $postal_code;
+        }
+        if ($city || $state_province || $postal_code) {
+            $ret .= "\n";
+        }
+        if ($country) {
+            $ret .= $app->make('helper/lists/countries')->getCountryName($country);
+        }
+
+        return $ret;
+    }
+
+    public static function formatAddressArray($address)
+    {
+        $app = Application::getFacadeApplication();
+
+        $ret = '';
+        $address1 = $address['address1'];
+        $address2 = $address['address2'];
+        $city = $address['city'];
+        $state_province = $address['state_province'];
+        $postal_code = $address['postal_code'];
+        $country = $address['country'];
+
+        if ($address1) {
+            $ret .= $address1;
+        }
+        if ($address2) {
+            $ret .= ", " . $address2;
+        }
+
+        $ret .= "\n";
+
+        if ($city) {
+            $ret .= $city;
+        }
+        if ($state_province) {
+            $ret .= ", ";
+        }
+        if ($state_province) {
+            $val = $app->make('helper/lists/states_provinces')->getStateProvinceName($state_province, $country);
+            if ('' == $val) {
+                $ret .= $state_province;
+            } else {
+                $ret .= $val;
+            }
+        }
+        if ($postal_code) {
+            $ret .= " " . $postal_code;
+        }
+        if ($city || $state_province || $postal_code) {
+            $ret .= "\n";
+        }
+        if ($country) {
+            $ret .= $app->make('helper/lists/countries')->getCountryName($country);
+        }
+
+        return $ret;
     }
 }

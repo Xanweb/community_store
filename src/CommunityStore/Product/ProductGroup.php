@@ -1,49 +1,52 @@
 <?php
 namespace Concrete\Package\CommunityStore\Src\CommunityStore\Product;
 
-use Database;
+use Doctrine\ORM\Mapping as ORM;
+use Concrete\Core\Support\Facade\DatabaseORM as dbORM;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Group\Group as StoreGroup;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product as StoreProduct;
 
 /**
- * @Entity
- * @Table(name="CommunityStoreProductGroups")
+ * @ORM\Entity
+ * @ORM\Table(name="CommunityStoreProductGroups")
  */
 class ProductGroup
 {
-    /** 
-     * @Id @Column(type="integer") 
-     * @GeneratedValue 
+    /**
+     * @ORM\Id @ORM\Column(type="integer")
+     * @ORM\GeneratedValue
      */
     protected $pgID;
 
     /**
-     * @Column(type="integer")
+     * @ORM\Column(type="integer")
      */
     protected $pID;
 
     /**
-     * @ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product",inversedBy="groups",cascade={"persist"})
-     * @JoinColumn(name="pID", referencedColumnName="pID", onDelete="CASCADE")
+     * @ORM\ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product",inversedBy="groups",cascade={"persist"})
+     * @ORM\JoinColumn(name="pID", referencedColumnName="pID", onDelete="CASCADE")
      */
     protected $product;
 
     /**
-     * @Column(type="integer")
+     * @ORM\Column(type="integer")
      */
     protected $gID;
 
     /**
-     * @ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Group\Group")
-     * @JoinColumn(name="gID", referencedColumnName="gID", onDelete="CASCADE")
+     * @ORM\ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Group\Group", inversedBy="products")
+     * @ORM\JoinColumn(name="gID", referencedColumnName="gID", onDelete="CASCADE")
      */
     protected $group;
 
-    public function getGroup() {
+    public function getGroup()
+    {
         return $this->group;
     }
 
-    public function setGroup($group) {
+    public function setGroup($group)
+    {
         $this->group = $group;
     }
 
@@ -51,6 +54,7 @@ class ProductGroup
     {
         $this->pID = $pID;
     }
+
     private function setGroupID($gID)
     {
         $this->gID = $gID;
@@ -64,6 +68,11 @@ class ProductGroup
     public function setProduct($product)
     {
         return $this->product = $product;
+    }
+
+    public function getProduct()
+    {
+        return $this->product;
     }
 
     public function getGroupID()
@@ -81,34 +90,48 @@ class ProductGroup
         $this->id = $id;
     }
 
-
     public static function getByID($pgID)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
+        $em = dbORM::entityManager();
 
         return $em->find(get_class(), $pgID);
     }
 
     public static function getGroupsForProduct(StoreProduct $product)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
-        $groups = $em->getRepository(get_class())->findBy(array('pID' => $product->getID()));
-        foreach ($groups as $key => $value) {
-            $group = new StoreGroup();
-            $groups[$key]->gName = $group->getByID($groups[$key]->gID)->getGroupName();
+        $em = dbORM::entityManager();
+        $productGroups = $em->getRepository(get_class())->findBy(['pID' => $product->getID()]);
+        $groups = [];
+        if (count($productGroups)) {
+            foreach ($productGroups as $productGroup) {
+                $groups[] = $productGroup->getGroup();
+            }
         }
 
         return $groups;
     }
 
+    public static function isProductInGroup(StoreProduct $product, StoreGroup $group)
+    {
+        $em = dbORM::entityManager();
+        $gID = $group->getGroupID();
+
+        $productGroup = $em->getRepository(get_class())->findBy(['pID' => $product->getID(), 'gID' => $gID]);
+        if (count($productGroup)) {
+            return true;
+        }
+
+        return false;
+    }
+
     public static function getGroupIDsForProduct(StoreProduct $product)
     {
         $groups = self::getGroupsForProduct($product);
-        $ids = array();
-        foreach ($groups as $g) {
-            $ids[] = $g->getGroupID();
+        $ids = [];
+        if (count($groups)) {
+            foreach ($groups as $g) {
+                $ids[] = $g->getGroupID();
+            }
         }
 
         return $ids;
@@ -116,7 +139,6 @@ class ProductGroup
 
     public static function addGroupsForProduct(array $data, StoreProduct $product)
     {
-
         self::removeGroupsForProduct($product);
         //add new ones.
         if (!empty($data['pProductGroups'])) {
@@ -128,27 +150,45 @@ class ProductGroup
 
     public static function removeGroupsForProduct(StoreProduct $product)
     {
-        $existingGroups = self::getGroupsForProduct($product);
-        foreach ($existingGroups as $group) {
-            $group->delete();
+        $em = dbORM::entityManager();
+        $groups = $em->getRepository(get_class())->findBy(['pID' => $product->getID()]);
+        foreach ($groups as $productGroup) {
+            $productGroup->delete();
+        }
+    }
+
+    public static function removeProductsForGroup(StoreGroup $group)
+    {
+        $em = dbORM::entityManager();
+        $groups = $em->getRepository(get_class())->findBy(['gID' => $group->getID()]);
+        foreach ($groups as $productGroup) {
+            $productGroup->delete();
         }
     }
 
     public static function add($product, $gID)
     {
-
-        $group = StoreGroup::getByID($gID);
-        if ($group) {
-            $productGroup = new self();
-            $productGroup->setProduct($product);
-            $productGroup->setGroup($group);
-            $productGroup->save();
+        if (!is_object($product)) {
+            $product = Product::getByID($product);
         }
 
-        return $productGroup;
+        if ($product) {
+            $group = StoreGroup::getByID($gID);
+            if ($group) {
+                $productGroup = new self();
+                $productGroup->setProduct($product);
+                $productGroup->setGroup($group);
+                $productGroup->save();
+            }
+
+            return $productGroup;
+        }
+
+        return false;
     }
 
-    public function __clone() {
+    public function __clone()
+    {
         if ($this->id) {
             $this->setID(null);
             $this->setProductID(null);
@@ -157,14 +197,14 @@ class ProductGroup
 
     public function save()
     {
-        $em = \Database::connection()->getEntityManager();
+        $em = dbORM::entityManager();
         $em->persist($this);
         $em->flush();
     }
 
     public function delete()
     {
-        $em = \Database::connection()->getEntityManager();
+        $em = dbORM::entityManager();
         $em->remove($this);
         $em->flush();
     }

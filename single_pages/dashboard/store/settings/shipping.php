@@ -1,17 +1,19 @@
 <?php
-defined('C5_EXECUTE') or die(_("Access Denied."));
+defined('C5_EXECUTE') or die("Access Denied.");
+use \Concrete\Core\Support\Facade\Url;
+use \Concrete\Package\CommunityStore\Src\CommunityStore\Shipping\Method\ShippingMethod as StoreShippingMethod;
+
+$app = \Concrete\Core\Support\Facade\Application::getFacadeApplication();
 $addViews = array('add','add_method','edit');
 $editViews = array('edit');
 
-use \Concrete\Package\CommunityStore\Src\CommunityStore\Shipping\Method\ShippingMethod as StoreShippingMethod;
-
-if(in_array($controller->getTask(),$addViews)){
+if(in_array($controller->getAction(),$addViews)){
 /// Add Shipping Method View
 ?>
 
 
-<form action="<?=URL::to('/dashboard/store/settings/shipping','add_method')?>" method="post">
-
+<form action="<?=Url::to('/dashboard/store/settings/shipping','add_method')?>" method="post">
+    <?= $token->output('community_store'); ?>
     <div class="row">
         <div class="col-xs-12 col-md-12">
         <?php //echo var_dump($smt); ?>
@@ -27,17 +29,23 @@ if(in_array($controller->getTask(),$addViews)){
                         <?= $form->text('methodName',is_object($sm)?$sm->getName():''); ?>
                     </div>
                 </div>
-                <div class="col-xs-12 col-sm-6">
+                <div class="col-xs-12 col-sm-3">
                     <div class="form-group">
                         <?= $form->label('methodEnabled',t("Enabled")); ?>
                         <?= $form->select('methodEnabled',array(true=>t('Yes'),false=>t('No')),is_object($sm)?$sm->isEnabled():''); ?>
+                    </div>
+                </div>
+                <div class="col-xs-12 col-sm-3">
+                    <div class="form-group">
+                        <?= $form->label('methodSortOrder',t("Sort Order")); ?>
+                        <?= $form->text('methodSortOrder',is_object($sm)?$sm->getSortOrder():''); ?>
                     </div>
                 </div>
                 <div class="col-xs-12 col-sm-12">
                     <div class="form-group">
                         <?= $form->label('methodDetails',t("Details")); ?>
                         <?php
-                        $editor = Core::make('editor');
+                        $editor = $app->make('editor');
                         echo $editor->outputStandardEditor('methodDetails', is_object($sm)?$sm->getDetails():'');
                         ?>
                         <style>
@@ -68,46 +76,79 @@ if(in_array($controller->getTask(),$addViews)){
     <?php
     if(count($methodTypes) > 0){?>
     <div class="btn-group">
-        <a href="" class="btn btn-primary dropdown-toggle" data-toggle="dropdown"><?= t('Add Method')?> <span class="caret"></span></a>
+        <a href="" class="btn btn-primary dropdown-toggle" data-toggle="dropdown"><?= t('Add Shipping Method')?> <span class="caret"></span></a>
         <ul class="dropdown-menu" role="menu">
             <?php foreach($methodTypes as $smt){?>
-                <?php if(!$smt->isHiddenFromAddMenu()){?>
-                    <li><a href="<?=URL::to('/dashboard/store/settings/shipping/add',$smt->getShippingMethodTypeID())?>"><?= $smt->getMethodTypeController()->getShippingMethodTypeName()?></a></li>
+                <?php if($smt && !$smt->isHiddenFromAddMenu()){?>
+                    <li><a href="<?=Url::to('/dashboard/store/settings/shipping/add',$smt->getShippingMethodTypeID())?>"><?= $smt->getMethodTypeController()->getShippingMethodTypeName()?></a></li>
                 <?php } ?>
             <?php } ?>
         </ul>
     </div>
     <?php } ?>
-    <a href="<?= \URL::to('/dashboard/store/settings')?>" class="btn btn-default"><i class="fa fa-gear"></i> <?= t("General Settings")?></a>
+    <a href="<?= Url::to('/dashboard/store/settings#settings-shipping')?>" class="btn btn-default"><i class="fa fa-gear"></i> <?= t("General Settings")?></a>
 </div>
 
 <div class="dashboard-shipping-methods">
 
-	<?php if(count($methodTypes) > 0){?>
-		<?php foreach($methodTypes as $methodType){?>
-			<table class="table table-striped">
-				<thead>
-					<th><?= t("%s Methods", $methodType->getMethodTypeController()->getShippingMethodTypeName())?></th>
-					<th class="text-right"><?= t("Actions")?></th>
-				</thead>
-				<tbody>
-					<?php foreach(StoreShippingMethod::getAvailableMethods($methodType->getShippingMethodTypeID()) as $method){ ?>
-					<tr>
-						<td><?= $method->getName()?></td>
-						<td class="text-right">
-							<a href="<?=URL::to('/dashboard/store/settings/shipping/edit',$method->getID())?>" class="btn btn-default"><?= t("Edit")?></a>
-							<?php if($method->getShippingMethodTypeMethod()->disableEnabled()){?>
-							    <a href="" class="btn btn-default"><?= t("Disable")?></a>
-							<?php } else { ?>
-							<a href="<?=URL::to('/dashboard/store/settings/shipping/delete',$method->getID())?>" class="btn btn-danger"><?= t("Delete")?></a>
-						    <?php } ?>
-						</td>
-					</tr>
-					<?php } ?>
-				</tbody>
-			</table>
-		<?php } ?>
+	<?php
+    $shippingmethodcount = 0;
+    $shippingmethodenabledcount = 0;
+
+    if(count($methodTypes) > 0){?>
+		<?php foreach($methodTypes as $methodType) {
+            $typemethods = StoreShippingMethod::getMethods($methodType->getShippingMethodTypeID());
+            if (count($typemethods) > 0) {
+                $shippingmethodcount++;
+                ?>
+                <table class="table table-striped">
+                    <thead>
+                    <tr>
+                        <th><?= t("%s Methods", $methodType->getMethodTypeController()->getShippingMethodTypeName()) ?></th>
+                        <th style="width: 20%;"><?= t("Enabled") ?></th>
+                        <th style="width: 20%;"><?= t("Sort Order") ?></th>
+                        <th class="text-right" style="width: 20%;"><?= t("Actions") ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($typemethods as $method) {
+                        if ($method) {
+                            if ($method->isEnabled()) {
+                                $shippingmethodenabledcount++;
+                            }
+                            ?>
+                            <tr>
+                                <td><?= $method->getName() ?></td>
+                                <td style="width: 20%;"><?= $method->isEnabled() ? t('Yes') : t('No') ?></td>
+                                <td style="width: 20%;"><?= $method->getSortOrder() ?></td>
+                                <td class="text-right" style="width: 20%;">
+                                    <a href="<?= Url::to('/dashboard/store/settings/shipping/edit', $method->getID()) ?>"
+                                       class="btn btn-default"><?= t("Edit") ?></a>
+                                    <?php if ($method->getShippingMethodTypeMethod()->disableEnabled()) { ?>
+                                        <a href="" class="btn btn-default"><?= t("Disable") ?></a>
+                                    <?php } else { ?>
+                                        <a href="<?= Url::to('/dashboard/store/settings/shipping/delete', $method->getID()) ?>"
+                                           class="btn btn-danger"><?= t("Delete") ?></a>
+                                    <?php } ?>
+                                </td>
+                            </tr>
+                        <?php }
+                    }?>
+                    </tbody>
+                </table>
+            <?php }
+        }?>
 	<?php } ?>
+
+    <?php
+    if ($shippingmethodcount == 0) { ?>
+    <p class="alert alert-warning"><?= t('No shipping methods are configured');?></p>
+    <?php } ?>
+
+    <?php
+    if ($shippingmethodcount > 0 && $shippingmethodenabledcount == 0) { ?>
+        <p class="alert alert-warning"><?= t('No shipping methods are currently enabled');?></p>
+    <?php } ?>
 
 </div>
 

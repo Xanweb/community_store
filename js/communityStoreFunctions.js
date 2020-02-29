@@ -19,6 +19,12 @@ $(function(){
         $(this).parent().addClass("active");
         localStorage.setItem("selectedTab", paneTarget);
         localStorage.setItem("selectedTabIndex",  $(this).parent().index());
+        if(history.pushState) {
+            history.pushState(null, null, '#'+paneTarget);
+        }
+        else {
+            location.hash = '#'+paneTarget;
+        }
     });
     $(".btn-delete-group").click(function(){
         var groupID = $(this).parent().attr("data-group-id");
@@ -71,6 +77,15 @@ $(function(){
             window.location = url;
         }
     });
+
+    $(".confirm-action").click(function(e){
+        e.preventDefault();
+        var confirmDelete = confirm($(this).data('confirm-message'));
+        if(confirmDelete == true) {
+            $(this).closest('form').submit();
+        }
+    });
+
     $("#btn-generate-page").click(function(e){
         e.preventDefault();
         var url = $(this).attr("href");
@@ -80,26 +95,66 @@ $(function(){
             window.location = url+'/'+pageTemplate;        
         }
     });
+    
+    window.addEventListener('popstate', function(e) {
+        if ($('a[data-pane-toggle]').length > 0) {
+            updateActiveTab(true);
+        }
+    });
 
 });
-var url = window.location.pathname.toString();
-var urlArray = url.split('/');
-var saveSuccess = urlArray[urlArray.length - 1];
-if(saveSuccess != "success" && saveSuccess != "updated" && saveSuccess != "added" || isNaN(parseInt(localStorage.getItem("selectedTabIndex")))){
-    localStorage.removeItem("selectedTab");
-    localStorage.removeItem("selectedTabIndex");
+function updateActiveTab(historyPopEvent) {
+    historyPopEvent = historyPopEvent || false;
+    var url = window.location.pathname.toString();
+    var hash = window.location.hash;
+    var urlArray = url.split('/');
+    var saveSuccess = urlArray[urlArray.length - 1];
+    var hashArray = saveSuccess.split('#');
+
+    if(!historyPopEvent && saveSuccess != "success" && saveSuccess != "updated" && saveSuccess != "added" && hash == "" || isNaN(parseInt(localStorage.getItem("selectedTabIndex")))){
+        localStorage.removeItem("selectedTab");
+        localStorage.removeItem("selectedTabIndex");
+    }
+    else{
+        $(".store-pane").removeClass('active'); 
+        $('a[data-pane-toggle]').parent().removeClass('active');
+        if (typeof hash != "undefined" && hash != null && hash != "") {
+            var link = $('a[data-pane-toggle][href="'+hash+'"]');
+            var paneTarget = hash.replace('#','');  
+            var paneTargetIndex = $('a[data-pane-toggle]').index( link );
+        } else {
+            var paneTarget = historyPopEvent ? $('a[data-pane-toggle]').eq(0).attr('href').replace('#','') : localStorage.getItem("selectedTab");
+            var paneTargetIndex = historyPopEvent ? 0 : parseInt(localStorage.getItem("selectedTabIndex"));
+        }
+        $('#'+paneTarget).addClass("active");
+        $('a[data-pane-toggle]:eq('+paneTargetIndex+')').parent().addClass("active");
+    }
 }
-else{
-    $(".store-pane").removeClass('active'); 
-     $('a[data-pane-toggle]').parent().removeClass('active');
-     var paneTarget = localStorage.getItem("selectedTab");
-     var paneTargetIndex = parseInt(localStorage.getItem("selectedTabIndex"));
-     $('#'+paneTarget).addClass("active");
-     $('a[data-pane-toggle]:eq('+paneTargetIndex+')').parent().addClass("active");
+
+function toggleTaxStatesAndCities(hide) {
+    hide = hide || false;
+    if (hide) {
+        $('.stateCityWrapper').addClass('hidden');
+    } else {
+        $('.stateCityWrapper').removeClass('hidden');
+    }
 }
 
 function updateTaxStates(){
     var countryCode = $("#taxCountry").val();
+    if (Array.isArray(countryCode)) {
+        if (countryCode.length > 1) {
+            toggleTaxStatesAndCities(true);
+            return;
+        } else if (countryCode.length == 1) {
+            countryCode = countryCode[0];
+        } else {
+            countryCode = '';
+        }
+    }
+
+    toggleTaxStatesAndCities();
+
     var selectedState = $("#savedTaxState").val();
     var stateutility = $("#settings-tax").attr("data-states-utility");
     $.ajax({
@@ -108,13 +163,10 @@ function updateTaxStates(){
        data: {country: countryCode, selectedState: selectedState, type: "tax"},
        success: function(states){
            $("#taxState").replaceWith(states);
-
-           if (states.indexOf(" selected ") >= 0) {
-               $("#taxState").prepend("<option value=''></option>");
-           } else {
-               $("#taxState").prepend("<option value='' selected='selected'></option>");
-           }
        } 
     });
+}
+if ($('a[data-pane-toggle]').length > 0) {
+    updateActiveTab();
 }
 updateTaxStates();
